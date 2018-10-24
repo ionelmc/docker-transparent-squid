@@ -22,6 +22,9 @@ if [[ -n "$CACHE_DOMAINS" ]]; then
     done
     echo "cache deny !cached_domains" >> patched-squid.conf
 fi
+for mask in $LOCALNET_IPS; do
+    echo "acl localnet src $mask" >> patched-squid.conf
+fi
 
 echo "Using this configuration:"
 cat squid.conf | egrep -v '^(#|$)' | sort | sed 's/^/    /'
@@ -36,6 +39,7 @@ ifconfig | egrep '^\S|inet'
 cleanup() {
     set +e
     iptables -t nat -D OUTPUT -p tcp --syn --dport 80 -j REDIRECT --to-port 3129
+    iptables -t nat -D PREROUTING -p tcp --syn --dport 80 -j REDIRECT --to-port 3129
     iptables -t nat -D OUTPUT -m owner --uid-owner squid -j RETURN
     for mask in $NOPROXY_IPS; do
         iptables -t nat -D OUTPUT --dst $mask -j RETURN
@@ -50,6 +54,7 @@ cleanup
 #   https://blog.bramp.net/post/2010/01/26/redirect-local-traffic-to-a-web-cache-with-iptables/
 #   https://blog.jessfraz.com/post/routing-traffic-through-tor-docker-container/
 iptables -t nat -I OUTPUT 1 -p tcp --syn --dport 80 -j REDIRECT --to-port 3129
+iptables -t nat -I PREROUTING 1 -p tcp --syn --dport 80 -j REDIRECT --to-port 3129
 iptables -t nat -I OUTPUT 1 -m owner --uid-owner squid -j RETURN
 for mask in $NOPROXY_IPS; do
     iptables -t nat -I OUTPUT 1 --dst $mask -j RETURN
