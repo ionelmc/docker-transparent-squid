@@ -4,7 +4,7 @@ A transparent proxy for local use (will redirect requests to squid using iptable
 
 Suggested use:
 
-    docker run --name transparent-squid --privileged --net=host -it ionelmc/transparent-squid
+    docker run --name=transparent-squid --restart=always --privileged --net=host -it ionelmc/transparent-squid
 
 Optional extra arguments:
 
