@@ -11,18 +11,11 @@ fi
 
 ip link delete dummy0 &> /dev/null
 
-cp /etc/squid/squid.conf squid.conf
-if [[ -n "$CACHE_SIZE" && -n "$CACHE_BACKEND" ]]; then
-    echo "cache_dir $CACHE_BACKEND /var/cache/squid $CACHE_SIZE 16 256" >> squid.conf
+cp /squid.conf patched-squid.conf
+if [[ -n "$CACHE_SIZE" && "$CACHE_SIZE" != "0" && -n "$CACHE_BACKEND" ]]; then
+    echo "cache_dir $CACHE_BACKEND /var/cache/squid $CACHE_SIZE 16 256" >> patched-squid.conf
+    echo "maximum_object_size $CACHE_MAXIMUM_OBJECT_SIZE MB" >> patched-squid.conf
 fi
-
-echo "http_port 3129 intercept" >> squid.conf
-echo "maximum_object_size $CACHE_MAXIMUM_OBJECT_SIZE MB" >> squid.conf
-
-echo "logfile_rotate 0" >> squid.conf
-echo "cache_log stdio:/dev/stdout" >> squid.conf
-echo "access_log stdio:/dev/stdout" >> squid.conf
-echo "cache_store_log stdio:/dev/stdout" >> squid.conf
 
 echo "Using this configuration:"
 cat squid.conf | egrep -v '^(#|$)' | sort | sed 's/^/    /'
@@ -30,28 +23,27 @@ cat squid.conf | egrep -v '^(#|$)' | sort | sed 's/^/    /'
 chown squid /dev/stdout
 
 # make swap dirs
-squid -Nz -f squid.conf
+squid -Nz -f patched-squid.conf
 
-ifconfig
+ifconfig | egrep '^\S|inet'
 
 cleanup() {
     set +e
-    iptables -t nat -D OUTPUT -p tcp -j HTTPFORCE
-    iptables -t nat -F HTTPFORCE
-    iptables -t nat -X HTTPFORCE
+    iptables -t nat -D OUTPUT -m owner --uid-owner squid -j RETURN
+    iptables -t nat -D OUTPUT -p tcp --syn --dport 80 -j REDIRECT --to-port 3129
+    iptables -t nat -D PREROUTING -p tcp --syn --dport 80 -j REDIRECT --to-port 3129
     set -e
 }
 trap cleanup EXIT
 cleanup
 
-# See: https://blog.bramp.net/post/2010/01/26/redirect-local-traffic-to-a-web-cache-with-iptables/
-iptables -t nat -N HTTPFORCE
-iptables -t nat -A HTTPFORCE --dst 127.0.0.1/8 -j RETURN
-iptables -t nat -A HTTPFORCE -m owner --uid-owner squid -j RETURN
-# alternative: iptables -t nat -A HTTPFORCE -p tcp --dport 80 -j DNAT --to $(hostname -i):3129
-iptables -t nat -A HTTPFORCE -p tcp --dport 80 -j REDIRECT --to-port 3129
-iptables -t nat -I OUTPUT 1 -p tcp -j HTTPFORCE
+# See:
+#   https://blog.bramp.net/post/2010/01/26/redirect-local-traffic-to-a-web-cache-with-iptables/
+#   https://blog.jessfraz.com/post/routing-traffic-through-tor-docker-container/
+iptables -t nat -I OUTPUT 1 -m owner --uid-owner squid -j RETURN
+iptables -t nat -I OUTPUT 2 -p tcp --syn --dport 80 -j REDIRECT --to-port 3129
+iptables -t nat -I PREROUTING 1 -p tcp --syn --dport 80 -j REDIRECT --to-port 3129
 
 # run
-squid -NdYC -f squid.conf
+squid -NdYC -f patched-squid.conf
 
