@@ -25,6 +25,9 @@ fi
 for mask in $LOCALNET_IPS; do
     echo "acl localnet src $mask" >> patched-squid.conf
 done
+echo "http_access allow localnet" >> patched-squid.conf
+echo "http_access allow localhost" >> patched-squid.conf
+echo "http_access deny all" >> patched-squid.conf
 
 echo "Using this configuration:"
 cat squid.conf | egrep -v '^(#|$)' | sort | sed 's/^/    /'
