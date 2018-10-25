@@ -24,7 +24,7 @@ if [[ -n "$CACHE_DOMAINS" ]]; then
 fi
 for mask in $LOCALNET_IPS; do
     echo "acl localnet src $mask" >> patched-squid.conf
-fi
+done
 
 echo "Using this configuration:"
 cat squid.conf | egrep -v '^(#|$)' | sort | sed 's/^/    /'
